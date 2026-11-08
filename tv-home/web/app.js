@@ -152,6 +152,8 @@
   var touched = false, expanded = false;
   var retryTimer = null, retryMs = 2500, statusTimer = null;
   var pmi = 0, plift = false;        // the people list: focused row, and whether that row is picked up
+  var wai = 0;                       // "Who's watching?" at start: the focused person
+  var lastKeyAt = Date.now();        // when the home last heard from the remote (for "Who's watching?")
   var lift = null;                   // the dock app picked up to move: {pkg}
   var newApps = [];                  // apps installed since this TV first saw its apps, until opened once
 
@@ -192,6 +194,7 @@
     // no "quick" from an older bridge: the sleep timer, and the picture switch where the TV has one
     QUICK = (Array.isArray(ST.quick) ? ST.quick : TVCFG.quick || ["sleep", "picture"])
       .filter(function (q, i, a) { return QUICK_ALL.indexOf(q) >= 0 && a.indexOf(q) === i; });
+    readPeople();
     THEME = (Q.match(/[?&]theme=([a-z]+)/) || [])[1] || lookSetting();
     if (THEME !== "classic") THEME = "night";
     NIGHT = THEME === "night";
@@ -221,14 +224,41 @@
     SCENES = st.order.filter(function (id) { return st.off.indexOf(id) < 0; }).map(sceneById).filter(Boolean);
     if (!SCENES.length) SCENES = [SCENE_LIB[0]];
     SCENE_MS = Math.max(5, parseInt(ST.scene_seconds || HOME.scene_seconds, 10) || 20) * 1000;
+    newApps = kept("tvhome.apps.new") || [];
+  }
+  function readPeople() {
     var people = CFG.people || [{ id: "person1", name: "Person 1" }, { id: "person2", name: "Person 2" }];
     // people added, renamed or removed in Home settings with no bridge to keep them
     var lst = kept("tvhome.people.list");
     if (lst && Array.isArray(lst.people) && (lst.pending || ALONE)) people = lst.people;
     setPeople(localPeopleOrder(people, OFFLINE));
-    newApps = kept("tvhome.apps.new") || [];
   }
-  function lookSetting() { return ST.look || kept("tvhome.look") || HOME.look || "night"; }
+  function lookSetting() { return personLook() || ST.look || kept("tvhome.look") || HOME.look || "night"; }
+  // ---- each person's own home (#multi-profile): their app order and look, kept on this TV ----
+  // On unless Home settings, People turns it off. Only with two or more people.
+  function perPerson() { return ST.per_person !== false && !NOBODY && PEOPLE.length >= 2; }
+  function personKey(what, id) { return "tvhome." + what + ".p." + (id || who); }
+  function personLook(id) {
+    if (!perPerson()) return null;
+    var l = kept(personKey("look", id));
+    return l === "night" || l === "classic" ? l : null;
+  }
+  // The look for whoever is watching (or the whole TV, with per-person homes off).
+  function setLook(id) {
+    if (perPerson()) keep(personKey("look"), id);
+    else { ST.look = id; keep("tvhome.look", id); }
+    saveSettings();
+  }
+  // This person's own app order, over the shared one, until they arrange their own it is the shared one.
+  // data.baseOrder is the shared one, so switching to someone with no order of their own goes back to it.
+  function personOrder() {
+    if (data.order && !data.order.person) data.baseOrder = data.order;
+    var po = perPerson() ? kept(personKey("order")) : null;
+    if (po && po.packages) data.order = { saved: true, line: po.line, packages: po.packages, person: true };
+    else if (data.order && data.order.person) data.order = data.baseOrder || null;
+  }
+  // "Who's watching?" at start: on unless Home settings, People turns it off. Two or more people.
+  function askWhoOn() { return ST.ask_who !== false && !NOBODY && PEOPLE.length >= 2; }
   function glassAmount() {
     var n = parseInt(ST.glass_amount != null ? ST.glass_amount : HOME.glass_amount, 10);
     return n >= 1 && n <= 5 ? n : 3;
@@ -254,7 +284,8 @@
   }
   function save() {
     if (MOCK || PREVIEW || OFFLINE) return;
-    var j = JSON.stringify({ showsBy: data.showsBy, screens: data.screens, order: data.order });
+    var shared = data.order && data.order.person ? data.baseOrder || null : data.order;   // a person's own order is kept apart
+    var j = JSON.stringify({ showsBy: data.showsBy, screens: data.screens, order: shared });
     try { localStorage.setItem(CACHE_KEY, j); } catch (e) {}
     try { if (TV && TV.keep) TV.keep(CACHE_KEY, j); } catch (e) {}
   }
@@ -778,13 +809,12 @@
   }
   // The look is kept on this TV; the page starts again in the other look.
   function toggleLook() {
-    ST.look = NIGHT ? "classic" : "night";
-    keep("tvhome.look", ST.look);
-    saveSettings();
+    setLook(NIGHT ? "classic" : "night");
     restart();
   }
   // Start the page again, so a new look or new settings take effect everywhere at once.
   function restart() {
+    try { sessionStorage.setItem("tvhome.restarted", "1"); } catch (e) {}   // not a fresh start: no "Who's watching?"
     location.replace(location.href.replace(/([?&])theme=[a-z]+&?/, "$1").replace(/[?&]$/, ""));
   }
   // The TV's own input list (HDMI, a console, a set top box): the TV_INPUT key through the bridge,
@@ -897,7 +927,10 @@
   // ---------------- who is watching: none, a pill switch for two, a head icon and a list for more ----------------
   var PALETTE = ["#ff9f0a", "#30b350", "#0a84ff", "#bf5af2", "#ff375f", "#00a5a8", "#5e5ce6", "#ac8e68"];
   function peopleCount() { return NOBODY ? 0 : PEOPLE.length; }
-  function isHead() { return peopleCount() >= 3; }
+  // Up to ROW_MAX people sit in a row of faces (one press to pick); more than that, the head icon and its list.
+  var ROW_MAX = 6;
+  function isHead() { return peopleCount() > ROW_MAX; }
+  function isFaces() { return peopleCount() >= 3 && !isHead(); }
   function colourOf(p) {
     if (p.colour) return p.colour;
     for (var h = 0, i = 0; i < p.id.length; i++) h = (h * 31 + p.id.charCodeAt(i)) >>> 0;
@@ -911,8 +944,15 @@
   function renderPeople() {
     var el = $("people"), n = peopleCount();
     el.classList.toggle("none", n < 2);
-    el.classList.toggle("head", n >= 3);
-    if (n >= 3) {
+    el.classList.toggle("head", isHead());
+    el.classList.toggle("faces", isFaces());
+    if (isFaces()) {
+      // a face for everyone; the name shows next to whoever is watching (and whoever has the focus)
+      el.innerHTML = PEOPLE.map(function (p) {
+        return '<span class="person face' + (p.id === who ? " on" : "") + '" title="' + esc(p.name) + '">' + avatarHTML(p) +
+          '<span class="fname">' + esc(p.name) + "</span></span>";
+      }).join("");
+    } else if (isHead()) {
       var cur = PEOPLE[whoIndex()];
       el.innerHTML = avatarHTML(cur) + '<span class="sr">' + esc(cur.name) + "</span>";
     } else {
@@ -948,6 +988,13 @@
     who = id; s = 0;
     try { localStorage.setItem("tvhome.who", who); } catch (e) {}
     if (!NOBODY) api("POST", "/api/who", { who: who }).catch(function () {});
+    if (perPerson()) {
+      // their own look: the page starts again in it; else just their own apps
+      var look = personLook() || ST.look || kept("tvhome.look") || HOME.look || "night";
+      if ((look === "classic") !== !NIGHT && !/[?&]theme=/.test(Q)) { restart(); return; }
+      personOrder();
+      renderGrid();
+    }
     renderShelf();
   }
   // The order of the names: kept by the bridge (the phone's People sheet uses the same list), or on
@@ -973,7 +1020,6 @@
     var anyone = PEOPLE.some(function (p) { return (data.showsBy[p.id] || []).length; });
     // nobody has anything on the go: no empty box, the photo has the space
     $("shelf-section").classList.toggle("empty", !anyone);
-    $("people").classList.toggle("empty", !anyone);
     renderPeople();
     if (!data.shows.length) {
       var name = PEOPLE[whoIndex()].name;
@@ -1097,6 +1143,7 @@
   // bridge. A TV-only order is marked pending and handed to the bridge the next time it answers.
   function persistOrder() {
     var o = data.order;
+    if (perPerson()) { o.person = true; keep(personKey("order"), { line: o.line, packages: o.packages }); return; }
     var local = { line: o.line, packages: o.packages, pending: true };
     keep("tvhome.order.tv", local);
     save();
@@ -1364,7 +1411,7 @@
 
   function shelfOn() { return !$("shelf-section").classList.contains("empty"); }
   // the switcher shows for two or more people, and only while someone has something on the go
-  function peopleOn() { return peopleCount() >= 2 && shelfOn(); }
+  function peopleOn() { return peopleCount() >= 2; }
   function toPeople() { zone = "people"; pi = whoIndex(); }
 
   function paintFocus() {
@@ -1375,6 +1422,7 @@
     if (zone === "gear") { if (gridEls[g]) gridEls[g].classList.add("focus"); renderGear(); return; }
     if (zone === "appmenu") { if (gridEls[g]) gridEls[g].classList.add("focus"); renderAppMenu(); return; }
     if (zone === "updask") { renderAsk(); return; }
+    if (zone === "whoask") { renderWhoAsk(); return; }
     if (zone === "menu") { renderMenu(); return; }
     if (zone === "inputs") { if (quickEls[qi]) quickEls[qi].classList.add("focus"); renderInputMenu(); return; }
     if (zone === "pmenu") { renderPop(); $("people").classList.add("focus"); return; }
@@ -1428,6 +1476,7 @@
     if (zone === "gear") { if (dy) { gi = Math.max(0, Math.min(1, gi + dy)); renderGear(); } return; }
     if (zone === "appmenu") { if (dy) { amI = Math.max(0, Math.min(amItems.length - 1, amI + dy)); renderAppMenu(); } return; }
     if (zone === "updask") { if (dy) { ai = Math.max(0, Math.min(1, ai + dy)); renderAsk(); } return; }
+    if (zone === "whoask") { if (dx) { wai = Math.max(0, Math.min(PEOPLE.length - 1, wai + dx)); renderWhoAsk(); } return; }
     if (zone === "inputs") { if (dy) { inI = Math.max(0, Math.min(inItems.length - 1, inI + dy)); renderInputMenu(); } return; }
     if (lift) { moveLift(dx, dy); return; }
     // Night with More apps open: the cards step aside, so up and down skip them
@@ -1504,6 +1553,7 @@
     if (zone === "gear") { closeGear(); paintFocus(); return; }
     if (zone === "appmenu") { closeAppMenu(); paintFocus(); return; }
     if (zone === "updask") { answerAsk(false); return; }   // BACK counts as "I'll check myself"
+    if (zone === "whoask") { answerWho(null); return; }   // BACK keeps whoever was watching last
     if (lift) { dropLift(); return; }   // BACK puts a picked-up app down where it is
     if (zone === "pmenu") { if (plift) dropPeople(); else closePop(); paintFocus(); return; }
     if (zone === "menu") { closeMenu(); paintFocus(); return; }   // BACK just closes the sleep choices
@@ -1519,7 +1569,7 @@
   function hold() {
     touched = true;
     if (zone === "settings") return setHold();
-    if (zone === "gear" || zone === "smart" || zone === "updask" || zone === "inputs") return false;
+    if (zone === "gear" || zone === "smart" || zone === "updask" || zone === "whoask" || zone === "inputs") return false;
     if (lift) { dropLift(); return true; }
     if (zone === "pmenu") {
       if (plift) dropPeople();
@@ -1537,6 +1587,7 @@
     if (zone === "gear") { if (gi === 0) openSettings(); else openTvSettings(); return; }
     if (zone === "appmenu") { doAppMenu(); return; }
     if (zone === "updask") { answerAsk(ai === 0); return; }
+    if (zone === "whoask") { answerWho(PEOPLE[wai].id); return; }
     if (lift) { dropLift(); return; }
     if (zone === "menu") { setSleep(SLEEP_CHOICES[menuI]); paintFocus(); return; }
     if (zone === "inputs") { doInputMenu(); paintFocus(); return; }
@@ -1889,7 +1940,7 @@
     var look = lookSetting() === "classic" ? "classic" : "night", st = sceneState(), rows = [head(t("look_head"))];
     ["night", "classic"].forEach(function (id) {
       rows.push({ kind: "choice", key: "look:" + id, label: t("look_" + id), sub: t("look_" + id + "_sub"), checked: look === id,
-        act: function () { ST.look = id; keep("tvhome.look", id); saveSettings(); } });
+        act: function () { setLook(id); } });
     });
     rows.push(head(t("scenes_head")));
     st.order.forEach(function (id) {
@@ -2127,6 +2178,14 @@
         startTyping({ label: t("people_type"), value: "", submit: addPerson });
       } });
     } else rows.push(info("people-full", t("people_full")));
+    if (list.length >= 2) {
+      rows.push({ kind: "toggle", key: "per-person", label: t("per_person"), sub: t("per_person_sub"), value: perPerson() ? t("on") : t("off"), act: function () {
+        ST.per_person = !perPerson(); saveSettings();
+      } });
+      rows.push({ kind: "toggle", key: "ask-who", label: t("ask_who"), sub: t("ask_who_sub"), value: askWhoOn() ? t("on") : t("off"), act: function () {
+        ST.ask_who = !askWhoOn(); saveSettings();
+      } });
+    }
     rows.push(info("people-note", t("people_note")));
     return rows;
   }
@@ -2308,6 +2367,40 @@
     startFocus();
     paintFocus();
     status(t("upd_ask_done"));
+  }
+  // ---- "Who's watching?" when the TV starts, and when the home comes back after a long while ----
+  // Big faces in a row; left and right, OK picks, Back keeps whoever was watching last.
+  var WHO_GAP_MS = 4 * 3600 * 1000;
+  function whoAsk(atStart) {
+    if (!askWhoOn()) return false;
+    if (atStart) {
+      var again = false;
+      try { again = sessionStorage.getItem("tvhome.restarted") === "1"; sessionStorage.removeItem("tvhome.restarted"); } catch (e) {}
+      if (again) return false;
+    }
+    if (zone !== "grid" && zone !== "shelf" && zone !== "people" && zone !== "quick") return false;
+    zone = "whoask"; wai = whoIndex();
+    clearFocus();
+    renderWhoAsk();
+    return true;
+  }
+  function renderWhoAsk() {
+    var el = $("who-ask");
+    el.innerHTML = "<h2>" + esc(t("who_ask")) + '</h2><div class="wa-row">' + PEOPLE.map(function (p, i) {
+      return '<div class="wa' + (i === wai ? " focus" : "") + (p.id === who ? " on" : "") + '">' + avatarHTML(p) + "<b>" + esc(p.name) + "</b></div>";
+    }).join("") + '</div><p class="wa-hint">' + esc(t("who_ask_hint")) + "</p>";
+    el.classList.add("on");
+    document.documentElement.classList.add("asking-who");
+  }
+  function answerWho(id) {
+    $("who-ask").classList.remove("on");
+    $("who-ask").innerHTML = "";
+    document.documentElement.classList.remove("asking-who");
+    zone = "grid";
+    if (id) pickWho(id);
+    startFocus();
+    paintFocus();
+    updAsk();
   }
   function updWhen(u) {
     if (!u.checked) return t("upd_never");
@@ -2595,11 +2688,12 @@
   // couch-tv has no system home behind it, so it opens couch-tv's own gear menu, like the gear tile.
   function isSettings(e) { return e.key === "Settings" || e.key === "TvSettings" || e.keyCode === 176; }
   function settingsKey() {
-    if (zone === "gear" || zone === "settings" || zone === "smart" || zone === "appmenu" || zone === "updask" || zone === "inputs") { goHome(); return; }
+    if (zone === "gear" || zone === "settings" || zone === "smart" || zone === "appmenu" || zone === "updask" || zone === "whoask" || zone === "inputs") { goHome(); return; }
     openGear();
   }
 
   document.addEventListener("keydown", function (e) {
+    lastKeyAt = Date.now();
     if (typingKey(e)) return;   // typing a place or a name: the keys belong to the text box
     if (isOk(e)) {
       e.preventDefault();
@@ -2650,9 +2744,10 @@
   }
 
   function render() {
+    personOrder();
     renderShelf();
     renderGrid();
-    if (!touched && zone !== "updask") startFocus();
+    if (!touched && zone !== "updask" && zone !== "whoask") startFocus();
     paintFocus();
   }
 
@@ -2685,7 +2780,7 @@
 
   function refresh() {
     // never reshuffle under something being moved, or under the settings screen
-    if (lift || zone === "pmenu" || zone === "settings" || zone === "gear" || zone === "smart" || zone === "updask") return Promise.resolve();
+    if (lift || zone === "pmenu" || zone === "settings" || zone === "gear" || zone === "smart" || zone === "updask" || zone === "whoask") return Promise.resolve();
     if (OFFLINE) {
       // only the TV's own apps, in the order last saved; no shows, no Screens
       if (TV) data.apps = sortApps(nativeApps() || []);
@@ -2722,7 +2817,7 @@
     ];
     return Promise.all(jobs.map(function (p) { return p.then(function () { return true; }, function () { return false; }); }))
       .then(function (ok) {
-        if (lift || zone === "pmenu" || zone === "settings" || zone === "gear" || zone === "smart" || zone === "updask") return;
+        if (lift || zone === "pmenu" || zone === "settings" || zone === "gear" || zone === "smart" || zone === "updask" || zone === "whoask") return;
         data.bridge = ok[0] || ok[2];
         var apps = TV ? nativeApps() : (window.MOCK_APPS ? window.MOCK_APPS.slice() : null);
         if (!apps) apps = (data.bridgeApps || []).filter(function (a) { return a.installed !== false && a.id !== "home"; })
@@ -2748,7 +2843,12 @@
   window.tv = { back: goHome, home: function () { if (zone === "settings") closeSettings(); else goHome(); refresh(); },
     // the remote's Settings/gear key, caught by the launcher natively (MainActivity.dispatchKeyEvent)
     settingsKey: function () { blip(0, 0); settingsKey(); },
-    resume: function () { okReset(); refresh(); if (!OFFLINE) refreshQuick(); refreshWeather(); startVideo(); },
+    resume: function () {
+      okReset();
+      var away = Date.now() - lastKeyAt > WHO_GAP_MS;
+      refresh().then(function () { if (away) whoAsk(); });
+      if (!OFFLINE) refreshQuick(); refreshWeather(); startVideo();
+    },
     // an app is in front: the video background stops until the home is back
     pause: pauseVideo,
     // the launcher's file picker has copied the chosen photos into its own storage (Home settings)
@@ -2795,7 +2895,7 @@
     // This TV says who is on its couch first, so what plays here is logged for them (each TV
     // keeps its own); then the lists. Once the home is up: the one-time "tell you about new versions?" question.
     var hello = OFFLINE ? Promise.resolve() : api("POST", "/api/who", { who: who }).catch(function () {});
-    hello.then(refresh).then(function () { mark("home-painted-live"); updTell(); updAsk(); });
+    hello.then(refresh).then(function () { mark("home-painted-live"); updTell(); if (!whoAsk(true)) updAsk(); });
   }
 
   if (MOCK || PREVIEW) {

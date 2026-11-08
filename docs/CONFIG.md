@@ -121,7 +121,24 @@ out the same way. The phone's People sheet keeps these marks when it renames or 
   person sees only what they watched on that TV: one card per show, newest first, up to 10, gone
   after 30 days with no watching. A show counts after a minute of the same title playing.
 - **Two:** the pill switch at the top left.
-- **Three or more:** a round head icon with the person's initial. OK opens the list.
+- **Three to six:** a row of faces (each person's initial in their colour) at the top left. Left
+  and right move along, OK picks: one press, no list. The name shows beside whoever is watching.
+- **Seven or more:** a round head icon with the person's initial. OK opens the list.
+
+The switcher shows whenever there are two or more people, even before anyone has something in
+Keep watching.
+
+**Each person's own home.** With two or more people, each person keeps their own app order
+(arranged with the TV remote: hold OK on an app) and their own look (Night or Classic, from the
+look button or Home settings, Look). Picking someone switches the home to theirs. Until a person
+arranges their own apps they get the shared order. These are kept on that TV only. Turn it off in
+Home settings, People, **Each person has their own home** (`per_person: false`), and everyone
+shares one home again.
+
+**Who's watching? at start.** With two or more people, a full-screen "Who's watching?" with big
+faces shows when the home starts (the TV switching on), and when the home comes back after four
+hours with no presses on it. Left and right, OK picks; Back keeps whoever was watching last.
+Turn it off in Home settings, People, **Ask who's watching** (`ask_who: false`).
 
 The list order is the order on screen. After the first start the bridge keeps the list in
 `bridge/data/people.json`, and that wins over `config.json` from then on, because the phone
