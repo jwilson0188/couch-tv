@@ -86,7 +86,7 @@
   // The same tools on other makers' TVs, by name.
   var TUCKED_NAMES = /^(screen ?shar|live ?tv|usb|media ?cent|browser|device assistant)/i;
   // The Play Store, under the name most people know it by (in the chosen language).
-  var RENAME = { "com.android.vending": "app_store" };
+  var RENAME = { "com.android.vending": "app_store", "com.amazon.venezia": "app_store" };
   // Never shown: home screens, store and system clutter, and Moonlight (a screen tile opens it).
   // A maker's own clutter (help apps, file browsers) is listed per house in config.json,
   // home.hide_packages, and added to this list in readConfig().
@@ -98,7 +98,8 @@
   var DOCK_APPS = 10;   // Night: apps in the dock before Settings and More apps (home.dock_size)
   var SETTINGS_PKG = "com.android.tv.settings";
   // The Play Store: always the first tile of More apps, never in the dock's order.
-  var STORE_PKG = "com.android.vending";
+  // On a Fire TV it is Amazon's Appstore instead: sortApps() picks whichever this TV has.
+  var STORE_PKG = "com.android.vending", STORE_PKGS = ["com.android.vending", "com.amazon.venezia"];
   var HOLD_MS = 600;    // how long OK is held to pick something up
 
   var ICONS = {
@@ -2769,6 +2770,8 @@
       i = APP_LAST.indexOf(p);
       return i >= 0 ? 2000 + i : 1000;
     };
+    var has = function (p) { return list.some(function (a) { return a.package === p; }); };
+    STORE_PKG = STORE_PKGS.filter(has)[0] || STORE_PKGS[0];
     return list.filter(function (a) { return HIDDEN.indexOf(a.package) < 0; })
       .sort(function (a, b) { return rank(a.package) - rank(b.package) || a.name.localeCompare(b.name); });
   }

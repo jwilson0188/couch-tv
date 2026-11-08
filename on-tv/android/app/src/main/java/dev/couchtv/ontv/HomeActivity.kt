@@ -122,9 +122,24 @@ class HomeActivity : Activity() {
                 out.put(JSONObject().put("package", ai.packageName).put("label", ri.loadLabel(packageManager).toString())
                     .put("hasBanner", ai.banner != 0 || ai.applicationInfo.banner != 0))
             }
+            // Fire TV: Amazon's Appstore has no TV (leanback) entry, only a plain launcher one, so
+            // it is added by hand; the home shows it as the App Store tile.
+            val amazonStore = "com.amazon.venezia"
+            if ((0 until out.length()).none { out.getJSONObject(it).optString("package") == amazonStore } &&
+                packageManager.getLaunchIntentForPackage(amazonStore) != null)
+                out.put(JSONObject().put("package", amazonStore).put("label", "Appstore").put("hasBanner", false))
             return out.toString()
         }
         @JavascriptInterface fun launch(pkg: String): Boolean {
+            // Fire TV's Appstore: its launcher entry opens "Your Apps & Channels"; the store itself
+            // (search, featured, categories) is ADEHomeActivity, so the App Store tile goes there.
+            if (pkg == "com.amazon.venezia") {
+                val store = Intent(Intent.ACTION_MAIN).setClassName(pkg, "com.amazon.venezia.ade.ADEHomeActivity")
+                if (packageManager.resolveActivity(store, 0) != null) {
+                    main.post { runCatching { startActivity(store.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
+                    return true
+                }
+            }
             val i = packageManager.getLeanbackLaunchIntentForPackage(pkg) ?: packageManager.getLaunchIntentForPackage(pkg) ?: return false
             main.post { runCatching { startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
             return true
