@@ -54,9 +54,12 @@ object FireHome {
 
     /**
      * Amazon's launcher package also holds Fire OS's Settings screens (`.ui.MainSettingsActivity`
-     * and others), so only its other screens count as Amazon's home.
+     * and others) and its search (the Appstore's search box opens
+     * `.deeplink.activity.TextSearchDeepLinkActivity`, seen on Fire OS 6.7), so only its other
+     * screens count as Amazon's home. Jumping away from those would make them unusable.
      */
-    fun isAmazonHome(pkg: String?, cls: String?) = pkg == AMAZON_HOME && cls?.contains("Settings") != true
+    private val NOT_HOME = listOf("Settings", "Search", "DeepLink")
+    fun isAmazonHome(pkg: String?, cls: String?) = pkg == AMAZON_HOME && NOT_HOME.none { cls?.contains(it) == true }
 
     /** The WatchService saw Amazon's home come on screen. */
     fun onAmazonHome() {
