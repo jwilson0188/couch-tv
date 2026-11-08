@@ -931,10 +931,27 @@
   var ROW_MAX = 6;
   function isHead() { return peopleCount() > ROW_MAX; }
   function isFaces() { return peopleCount() >= 3 && !isHead(); }
+  function hashColour(p) {
+    for (var h = 0, i = 0; i < p.id.length; i++) h = (h * 31 + p.id.charCodeAt(i)) >>> 0;
+    return h % PALETTE.length;
+  }
+  // Everyone in the house gets a different colour (two J's in green look like one person): each
+  // person takes their own colour if it is free, else the next free one, in list order.
   function colourOf(p) {
     if (p.colour) return p.colour;
-    for (var h = 0, i = 0; i < p.id.length; i++) h = (h * 31 + p.id.charCodeAt(i)) >>> 0;
-    return PALETTE[h % PALETTE.length];
+    var used = {};
+    for (var k = 0; k < PEOPLE.length; k++) {
+      var q = PEOPLE[k], c;
+      if (q.colour) c = q.colour;
+      else {
+        var n = hashColour(q), tries = 0;
+        while (used[PALETTE[n]] && tries++ < PALETTE.length) n = (n + 1) % PALETTE.length;
+        c = PALETTE[n];
+      }
+      used[c] = true;
+      if (q.id === p.id) return c;
+    }
+    return PALETTE[hashColour(p)];
   }
   function avatarHTML(p) {
     return '<span class="avatar" style="background:' + esc(colourOf(p)) + '">' + esc((p.name || "?").trim().charAt(0).toUpperCase()) + "</span>";
@@ -949,7 +966,7 @@
     if (isFaces()) {
       // a face for everyone; the name shows next to whoever is watching (and whoever has the focus)
       el.innerHTML = PEOPLE.map(function (p) {
-        return '<span class="person face' + (p.id === who ? " on" : "") + '" title="' + esc(p.name) + '">' + avatarHTML(p) +
+        return '<span class="person pface' + (p.id === who ? " on" : "") + '" title="' + esc(p.name) + '">' + avatarHTML(p) +
           '<span class="fname">' + esc(p.name) + "</span></span>";
       }).join("");
     } else if (isHead()) {

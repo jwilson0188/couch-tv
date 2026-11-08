@@ -117,6 +117,16 @@ object FireHome {
         val usm = App.instance.getSystemService(UsageStatsManager::class.java)
         val power = App.instance.getSystemService(PowerManager::class.java)
         var since = System.currentTimeMillis()
+        // Amazon's home may already be in front when the watch starts (at boot, or after this app
+        // was updated or stopped). Pressing Home again then sends no new event, so look back once
+        // for whatever came forward last (seen on Fire OS 6.7 / Toshiba Fire TV Edition).
+        runCatching {
+            val past = usm.queryEvents(since - 30 * 60_000L, since)
+            val e = UsageEvents.Event()
+            var lastPkg: String? = null; var lastCls: String? = null
+            while (past.getNextEvent(e)) if (e.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND) { lastPkg = e.packageName; lastCls = e.className }
+            if (isAmazonHome(lastPkg, lastCls)) { Log.i(TAG, "Amazon's home is already in front, jumping"); jump() }
+        }
         while (wanted && usageAllowed && !WatchService.connected) {
             Thread.sleep(if (power.isInteractive) 500 else 3_000)
             val now = System.currentTimeMillis()
