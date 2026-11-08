@@ -67,6 +67,21 @@ network as the stick.
    ```
 8. Press Home from any app: couch-tv comes back.
 
+### Fire OS 6 (Android 7.1): one more grant
+
+Seen on a **Toshiba Fire TV Edition TV (55LF711U20) on Fire OS 6.7.0.8**: steps 6 and 7 switch the
+watcher on (`enabled_accessibility_services` lists it), but Fire OS 6's own accessibility manager
+(`AmazonAccessibilityManagerService`) never binds it, so `dumpsys accessibility` shows
+`services:{}` and Home stays on Amazon's home, even after a restart. The app's second way of
+watching, app-usage events, works there. Give it usage access, then open Couch TV once:
+
+```sh
+adb -s <tv-ip>:5555 shell appops set dev.couchtv.ontv GET_USAGE_STATS allow
+```
+
+Check it took: press Home, then
+`adb -s <tv-ip>:5555 logcat -d -s couchtv.firehome` shows `Amazon's home came forward, jumping`.
+
 ## Settings
 
 The gear tile in the dock opens Home settings (weather place, apps, quick buttons, look). They can
