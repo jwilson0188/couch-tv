@@ -181,6 +181,12 @@
   function readConfig() {
     CFG = window.COUCH_CONFIG || {};
     HOME = CFG.home || {};
+    // Own scenes shipped with the app (backgrounds/mine/scenes.js), for the on-TV app, whose
+    // settings come from the TV rather than config.json: used when config.json names none.
+    if (!Array.isArray(HOME.my_scenes) && Array.isArray(window.COUCH_MY_SCENES) && window.COUCH_MY_SCENES.length) {
+      HOME = Object.assign({}, HOME, { my_scenes: window.COUCH_MY_SCENES });
+      if (!Array.isArray(HOME.scenes) && Array.isArray(window.COUCH_SCENE_ORDER)) HOME.scenes = window.COUCH_SCENE_ORDER;
+    }
     ON_TV = CFG.mode === "on-tv";
     ST = loadSettings();
     // the language: Home settings, then config.json, then the TV's own language if the home speaks it
