@@ -852,3 +852,169 @@ body {
 .wa-hint { margin-top: 4rem; font-size: 1.4375rem; color: rgba(255, 255, 255, 0.6); }
 html.asking-who .top, html.asking-who .home { visibility: hidden; }
 @media (prefers-reduced-motion: reduce) { .wa { transition: none; } }
+
+/* ================= Neo: Night's layout, futuristic =================
+   html.look-neo on top of .theme-night. tvOS bones (a top shelf, an icon dock, focus that lifts),
+   with aurora light, dark glass with lit edges and a cyan-to-violet focus ring. Only transform and
+   opacity animate, and blur stays where Night already had it, so a TV's small GPU keeps up. */
+.look-neo {
+  --neo-a: #66f0ff;   /* cyan */
+  --neo-b: #a07bff;   /* violet */
+  --neo-glass: rgba(10, 12, 24, 0.46);
+  --neo-edge: rgba(150, 230, 255, 0.22);
+  --neo-ring: 0 0 0 0.1875rem rgba(255, 255, 255, 0.92), 0 0 0 0.4375rem rgba(102, 240, 255, 0.55), 0 0 2.25rem 0.375rem rgba(140, 110, 255, 0.55);
+}
+/* the scenes stay; their big clock and cut-outs step aside, the photo goes a little darker and cooler */
+.look-neo .gclock, .look-neo .scene .fg { display: none; }
+.look-neo .scene .sbg { filter: brightness(0.62) saturate(1.15) hue-rotate(-8deg); }
+.look-neo.theme-night .scrim {
+  background:
+    linear-gradient(90deg, rgba(4, 6, 16, 0.72) 0%, rgba(4, 6, 16, 0.25) 45%, rgba(4, 6, 16, 0) 70%),
+    linear-gradient(180deg, rgba(4, 6, 16, 0.35) 0%, rgba(4, 6, 16, 0) 30%, rgba(4, 6, 16, 0.2) 55%, rgba(4, 6, 16, 0.85) 100%);
+}
+/* aurora: two soft lights drifting slowly over the photo */
+.look-neo .scrim::before, .look-neo .scrim::after {
+  content: ""; position: absolute; width: 90vw; height: 90vh; border-radius: 50%; pointer-events: none;
+  mix-blend-mode: screen; opacity: 0.5; will-change: transform;
+}
+.look-neo .scrim::before {
+  left: -25vw; top: -35vh; background: radial-gradient(closest-side, rgba(102, 240, 255, 0.55), rgba(102, 240, 255, 0));
+  animation: neo-drift-a 38s ease-in-out infinite alternate;
+}
+.look-neo .scrim::after {
+  right: -30vw; top: -20vh; background: radial-gradient(closest-side, rgba(160, 123, 255, 0.6), rgba(160, 123, 255, 0));
+  animation: neo-drift-b 46s ease-in-out infinite alternate;
+}
+@keyframes neo-drift-a { from { transform: translate(0, 0) scale(1); } to { transform: translate(22vw, 14vh) scale(1.25); } }
+@keyframes neo-drift-b { from { transform: translate(0, 0) scale(1.1); } to { transform: translate(-26vw, 22vh) scale(0.9); } }
+/* a faint horizon line the dock stands on */
+.look-neo .home::after {
+  content: ""; position: fixed; left: 8vw; right: 8vw; bottom: 1.75rem; height: 0.0625rem; pointer-events: none;
+  background: linear-gradient(90deg, rgba(102, 240, 255, 0), rgba(102, 240, 255, 0.55) 30%, rgba(160, 123, 255, 0.55) 70%, rgba(160, 123, 255, 0));
+  box-shadow: 0 0 1rem rgba(120, 180, 255, 0.5);
+}
+
+/* the clock: a cinematic title on the left, where tvOS's top shelf puts a show's name */
+.look-neo.theme-night .time {
+  display: block; position: fixed; left: var(--safe-x); top: 15.5rem; text-align: left; margin: 0;
+  font-size: 10.5rem; line-height: 10rem; font-weight: 200; letter-spacing: -0.045em;
+  color: transparent; -webkit-background-clip: text; background-clip: text;
+  background-image: linear-gradient(100deg, #ffffff 0%, #eaf9ff 40%, #9fe9ff 75%, #b9a6ff 100%);
+  filter: drop-shadow(0 0.5rem 2.5rem rgba(60, 140, 255, 0.35));
+}
+.look-neo.theme-night .time small {
+  font-size: 2.5rem; font-weight: 400; letter-spacing: 0.08em; margin-left: 1rem; vertical-align: 0.4em;
+  color: rgba(200, 240, 255, 0.85); -webkit-text-fill-color: rgba(200, 240, 255, 0.85);
+}
+.look-neo.theme-night .date {
+  position: fixed; left: var(--safe-x); right: auto; top: 27.25rem; text-align: left;
+  font-size: 1.875rem; line-height: 2.25rem; font-weight: 500; letter-spacing: 0.01em; color: rgba(235, 245, 255, 0.92);
+}
+.look-neo.theme-night .date .wx { color: rgba(170, 230, 255, 0.85); }
+.look-neo.theme-night .date svg { stroke: var(--neo-a); }
+.look-neo.theme-night .date.swap { opacity: 1; }   /* no scene clock to wait for */
+/* a thin lit line under the date, like a HUD */
+.look-neo.theme-night .date::after {
+  content: ""; display: block; width: 14rem; height: 0.125rem; margin-top: 1.25rem; border-radius: 0.125rem;
+  background: linear-gradient(90deg, var(--neo-a), var(--neo-b) 70%, rgba(160, 123, 255, 0));
+  box-shadow: 0 0 0.875rem rgba(102, 240, 255, 0.6);
+}
+
+/* dark glass with a lit edge, for every panel */
+.look-neo.theme-night .people, .look-neo.theme-night .qbtn, .look-neo.theme-night .ncard {
+  background: var(--neo-glass);
+  box-shadow: inset 0 0 0 0.0625rem var(--neo-edge), inset 0 0.0625rem 0 rgba(200, 245, 255, 0.28), 0 1.5rem 3.75rem rgba(0, 0, 10, 0.4);
+}
+.look-neo.theme-night .qbtn.focus, .look-neo .person.focus:not(.on) {
+  background: rgba(20, 24, 44, 0.75); color: #fff; box-shadow: var(--neo-ring);
+}
+.look-neo.theme-night .qbtn.focus { transform: scale(1.1); }
+.look-neo .person.on { background: linear-gradient(100deg, #ffffff, #dff8ff); color: #0a0f1e; }
+.look-neo .person.on.focus { box-shadow: var(--neo-ring); }
+
+/* the dock: no tray, icons float on the horizon; the focused one lifts with a neon ring */
+.look-neo.theme-night .grid {
+  background: none; -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none;
+  column-gap: 2rem; padding: 1.375rem 0;
+}
+.look-neo.theme-night .apps { bottom: 4rem; }
+.look-neo.theme-night .app .face { box-shadow: 0 0 0 0.0625rem rgba(170, 230, 255, 0.18), 0 1rem 2rem rgba(0, 0, 12, 0.55); }
+.look-neo.theme-night .app:not(.focus) .face img { filter: brightness(0.74) saturate(0.9); }
+.look-neo.theme-night .app.focus { transform: scale(1.22) translateY(-1rem); }
+.look-neo.theme-night .app.focus .face { box-shadow: var(--neo-ring), 0 1.5rem 3rem rgba(0, 0, 12, 0.6); }
+.look-neo.theme-night .app .face.tool { background: rgba(20, 26, 48, 0.7); box-shadow: inset 0 0 0 0.0625rem var(--neo-edge); }
+.look-neo.theme-night .app .face.tool svg { stroke: #dff6ff; }
+.look-neo.theme-night .app .label {
+  font-weight: 600; letter-spacing: 0.02em; color: #eaf9ff; text-shadow: 0 0 0.75rem rgba(102, 240, 255, 0.6);
+}
+/* More apps open: the full list sits on a glass panel again so it reads over the photo */
+.look-neo.theme-night.expanded .grid {
+  background: var(--neo-glass); -webkit-backdrop-filter: blur(1.75rem); backdrop-filter: blur(1.75rem);
+  box-shadow: inset 0 0 0 0.0625rem var(--neo-edge); padding: 1.375rem 1.75rem; border-radius: 2.875rem;
+}
+
+/* Keep watching: glass cards with a lit top edge, neon focus */
+.look-neo .ncard { position: relative; overflow: hidden; }
+.look-neo .ncard::before {
+  content: ""; position: absolute; left: 1.5rem; right: 1.5rem; top: 0; height: 0.0625rem;
+  background: linear-gradient(90deg, rgba(102, 240, 255, 0), rgba(102, 240, 255, 0.7), rgba(160, 123, 255, 0.7), rgba(160, 123, 255, 0));
+}
+.look-neo .ncard .nbar i { background: linear-gradient(90deg, var(--neo-a), var(--neo-b)); box-shadow: 0 0 0.5rem rgba(102, 240, 255, 0.7); }
+.look-neo .ncard.focus { transform: scale(1.06); box-shadow: var(--neo-ring), 0 1.25rem 2.5rem rgba(0, 0, 12, 0.5); overflow: visible; }
+.look-neo.theme-night .shelf-head h2 { letter-spacing: 0.14em; text-transform: uppercase; font-size: 1.25rem; color: rgba(170, 230, 255, 0.85); }
+
+/* Who's watching?: aurora behind big faces, neon on the one picked */
+.look-neo .who-ask {
+  background:
+    radial-gradient(60vw 50vh at 20% 20%, rgba(102, 240, 255, 0.18), rgba(102, 240, 255, 0) 70%),
+    radial-gradient(60vw 60vh at 85% 80%, rgba(160, 123, 255, 0.22), rgba(160, 123, 255, 0) 70%),
+    rgba(4, 6, 16, 0.8);
+}
+.look-neo .who-ask h2 { font-weight: 300; letter-spacing: -0.01em; }
+.look-neo .wa .avatar { box-shadow: inset 0 0 0 0.125rem rgba(200, 245, 255, 0.3), 0 0 2rem rgba(0, 0, 0, 0.4); }
+.look-neo .wa.focus .avatar { box-shadow: var(--neo-ring); }
+.look-neo .wa.focus b { color: #fff; text-shadow: 0 0 1rem rgba(102, 240, 255, 0.7); }
+
+@media (prefers-reduced-motion: reduce) {
+  .look-neo .scrim::before, .look-neo .scrim::after { animation: none; }
+}
+
+/* ---- Neo's backdrop: no photo, just light ----
+   Deep navy-black, a faint starfield, and three soft lights (cyan, violet, a little magenta) that
+   drift on 40 to 60 second loops. The scrim's two lights (above) sit over this one. */
+.look-neo.theme-night .scenes { display: none; }
+.look-neo.theme-night .bg {
+  display: block;
+  background:
+    radial-gradient(120vw 80vh at 50% 120%, rgba(40, 30, 90, 0.55), rgba(40, 30, 90, 0) 60%),
+    linear-gradient(180deg, #05060f 0%, #070a1c 55%, #0b0a22 100%);
+}
+/* stars: two layers of tiny dots, the far one dimmer */
+.look-neo .bg::before {
+  content: ""; position: absolute; top: 0; right: 0; bottom: 0; left: 0; opacity: 0.55;
+  background-image:
+    radial-gradient(0.09rem 0.09rem at 12% 18%, #fff, rgba(255,255,255,0)),
+    radial-gradient(0.07rem 0.07rem at 27% 64%, #dff, rgba(255,255,255,0)),
+    radial-gradient(0.08rem 0.08rem at 41% 33%, #fff, rgba(255,255,255,0)),
+    radial-gradient(0.06rem 0.06rem at 58% 12%, #cff, rgba(255,255,255,0)),
+    radial-gradient(0.09rem 0.09rem at 66% 47%, #fff, rgba(255,255,255,0)),
+    radial-gradient(0.07rem 0.07rem at 79% 26%, #edf, rgba(255,255,255,0)),
+    radial-gradient(0.06rem 0.06rem at 88% 71%, #fff, rgba(255,255,255,0)),
+    radial-gradient(0.08rem 0.08rem at 6% 82%, #dff, rgba(255,255,255,0)),
+    radial-gradient(0.06rem 0.06rem at 35% 88%, #fff, rgba(255,255,255,0)),
+    radial-gradient(0.07rem 0.07rem at 94% 8%, #fff, rgba(255,255,255,0));
+  background-size: 37rem 23rem;
+  animation: neo-twinkle 9s ease-in-out infinite alternate;
+}
+@keyframes neo-twinkle { from { opacity: 0.35; } to { opacity: 0.6; } }
+/* a third, warmer light low on the right, under the dock */
+.look-neo .bg::after {
+  content: ""; position: absolute; width: 80vw; height: 80vh; right: -10vw; bottom: -40vh; border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(255, 90, 200, 0.22), rgba(255, 90, 200, 0));
+  will-change: transform; animation: neo-drift-c 58s ease-in-out infinite alternate;
+}
+@keyframes neo-drift-c { from { transform: translate(0, 0) scale(1); } to { transform: translate(-30vw, -10vh) scale(1.2); } }
+/* with no photo to darken, the scrim's dark gradients go; its two lights stay and get a little brighter */
+.look-neo.theme-night .scrim { background: none; }
+.look-neo .scrim::before, .look-neo .scrim::after { opacity: 0.62; }
+@media (prefers-reduced-motion: reduce) { .look-neo .bg::before, .look-neo .bg::after { animation: none; } }

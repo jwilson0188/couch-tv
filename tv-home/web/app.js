@@ -31,6 +31,8 @@
   var ON_TV = false;   // served by the on-TV app (config "mode"), which can open the TV's own settings screens
   // The look: ?theme= for a preview, then Home settings (or the Look button) on this TV, then home.look.
   var THEME = "night", NIGHT = true, CLOCK24 = false;
+  // LOOK is what was picked: "night", "neo" (Night's layout, restyled futuristic) or "classic".
+  var LOOK = "night", NEO = false, LOOKS = ["night", "neo", "classic"];
   // Glass panels ("off", "on", or "lite": no blur, for slower TVs) and the video background, from
   // Home settings, then home.glass and home.video_url. Both are off unless someone switches them on.
   var GLASS = "off", GLASS_ICONS = false, VIDEO_ON = false, VIDEO_URL = "";
@@ -195,9 +197,12 @@
     QUICK = (Array.isArray(ST.quick) ? ST.quick : TVCFG.quick || ["sleep", "picture"])
       .filter(function (q, i, a) { return QUICK_ALL.indexOf(q) >= 0 && a.indexOf(q) === i; });
     readPeople();
-    THEME = (Q.match(/[?&]theme=([a-z]+)/) || [])[1] || lookSetting();
-    if (THEME !== "classic") THEME = "night";
+    LOOK = (Q.match(/[?&]theme=([a-z]+)/) || [])[1] || lookSetting();
+    if (LOOKS.indexOf(LOOK) < 0) LOOK = "night";
+    NEO = LOOK === "neo";
+    THEME = LOOK === "classic" ? "classic" : "night";
     NIGHT = THEME === "night";
+    document.documentElement.classList.toggle("look-neo", NEO);
     document.documentElement.classList.toggle("theme-night", NIGHT);
     GLASS = glassSetting();
     document.documentElement.classList.toggle("glass", GLASS !== "off");
@@ -241,7 +246,7 @@
   function personLook(id) {
     if (!perPerson()) return null;
     var l = kept(personKey("look", id));
-    return l === "night" || l === "classic" ? l : null;
+    return LOOKS.indexOf(l) >= 0 ? l : null;
   }
   // The look for whoever is watching (or the whole TV, with per-person homes off).
   function setLook(id) {
@@ -410,7 +415,7 @@
       '<span class="ww"> ' + esc(wxText(w)) + "</span></span>" : "") + "</span>";
     fitDate();
     document.body.classList.toggle("night", h >= 21 || h < 6);
-    if (NIGHT) glassClock(hm);
+    if (NIGHT && !NEO) glassClock(hm);   // Neo hides the scenes' big clock
     if (quickReady) renderQuick();
   }
 
@@ -760,7 +765,8 @@
         el.innerHTML = ICONS.picture + "<span>" + esc(picLabel()) + "</span>";
         el.classList.toggle("off", !picCanSet);
       } else if (q === "look") {
-        el.innerHTML = ICONS.look + "<span>" + esc(NIGHT ? t("classic_look") : t("night_look")) + "</span>";
+        var nx = LOOKS[(LOOKS.indexOf(LOOK) + 1) % LOOKS.length];
+        el.innerHTML = ICONS.look + "<span>" + esc(nx === "classic" ? t("classic_look") : nx === "neo" ? t("neo_look") : t("night_look")) + "</span>";
       } else if (q === "input") {
         el.innerHTML = ICONS.input + "<span>" + esc(t("input")) + "</span>";
       } else if (q === "bluetooth" || q === "network") {
@@ -809,7 +815,7 @@
   }
   // The look is kept on this TV; the page starts again in the other look.
   function toggleLook() {
-    setLook(NIGHT ? "classic" : "night");
+    setLook(LOOKS[(LOOKS.indexOf(LOOK) + 1) % LOOKS.length]);   // Night, Neo, Classic, then round again
     restart();
   }
   // Start the page again, so a new look or new settings take effect everywhere at once.
@@ -1008,7 +1014,8 @@
     if (perPerson()) {
       // their own look: the page starts again in it; else just their own apps
       var look = personLook() || ST.look || kept("tvhome.look") || HOME.look || "night";
-      if ((look === "classic") !== !NIGHT && !/[?&]theme=/.test(Q)) { restart(); return; }
+      if (LOOKS.indexOf(look) < 0) look = "night";
+      if (look !== LOOK && !/[?&]theme=/.test(Q)) { restart(); return; }
       personOrder();
       renderGrid();
     }
@@ -1954,8 +1961,8 @@
   // ---- look, scenes and the household's own photos ----
   var SECS_STEPS = [10, 15, 20, 30, 45, 60, 120];
   function lookRows() {
-    var look = lookSetting() === "classic" ? "classic" : "night", st = sceneState(), rows = [head(t("look_head"))];
-    ["night", "classic"].forEach(function (id) {
+    var look = LOOKS.indexOf(lookSetting()) >= 0 ? lookSetting() : "night", st = sceneState(), rows = [head(t("look_head"))];
+    LOOKS.forEach(function (id) {
       rows.push({ kind: "choice", key: "look:" + id, label: t("look_" + id), sub: t("look_" + id + "_sub"), checked: look === id,
         act: function () { setLook(id); } });
     });
@@ -2882,13 +2889,15 @@
     mark("app-start");
     clock();
     setInterval(clock, 15000);
-    if (NIGHT) {
+    if (NIGHT && !NEO) {   // Neo has no photos: its backdrop is light drawn in app.css
       buildScenes();
       // ?scene=fog starts on that scene, for previews (?scene=own: the first of the household's
       // photos; ?scene=<id>: one of your own scenes)
       var first = (Q.match(/[?&]scene=([a-z0-9]+)/) || [])[1];
       showScene(Math.max(0, SCENES.map(function (s) { return s.own ? "own" : s.id; }).indexOf(first)));
       if (SCENES.length > 1) setInterval(nextScene, SCENE_MS);
+    }
+    if (NIGHT) {
       // the clock font must be in before the glass is measured
       if (document.fonts) document.fonts.load("300 10px Antonio").then(function () { glassShown = ""; clock(); });
       refreshWeather();
